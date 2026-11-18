@@ -1,8 +1,33 @@
-# TopLayer
+<p align="center">
+  <img src="Resources/icon.png" width="128" height="128" alt="The TopLayer icon: three stacked layers">
+</p>
 
-A macOS overlay that sits above every app, including fullscreen ones, and lets you follow and answer your Claude Code and Codex threads without switching apps.
+<h1 align="center">TopLayer</h1>
 
-It shows a small squircle in a screen corner. Click it, or press ⌃⌥Space, and it opens into a panel with your running Claude sessions and recent Codex threads. From there you can read a thread as it updates, reply to it, approve permission prompts, and link a Claude session with a Codex thread so the two agents can message each other under limits you set.
+<p align="center">
+  A macOS overlay that sits above every app, fullscreen ones included,<br>
+  and lets you follow and answer your Claude Code and Codex threads without switching apps.
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/macOS-26%2B-000000?logo=apple&logoColor=white" alt="Needs macOS 26 or later">
+  <img src="https://img.shields.io/badge/Swift-5.9%2B-F05138?logo=swift&logoColor=white" alt="Written in Swift">
+  <img src="https://img.shields.io/badge/works%20with-Claude%20Code%20%C2%B7%20Codex-8A63D2" alt="Works with Claude Code and Codex">
+  <img src="https://img.shields.io/badge/version-0.1.0-blue" alt="Version 0.1.0">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT licence"></a>
+</p>
+
+---
+
+TopLayer shows a small squircle in a corner of the screen. Click it, or press ⌃⌥Space, and it opens into a panel with your running Claude sessions and recent Codex threads.
+
+- 👀 **Follow** a thread as it updates, from any app
+- 💬 **Reply** to it without leaving what you are doing
+- ✅ **Approve or deny** permission prompts with ⌘↩ and ⌘.
+- ➕ **Start** new Codex threads and Claude sessions, with the folder, model and effort you pick
+- 🤝 **Link** a Claude session and a Codex thread in a group chat, so the two agents message each other under limits you set
+- 📊 **See plan usage** for both, as a ring in each section's header
+- 🌐 **Open** each product's own web client inside the overlay
 
 This is a personal tool at version 0.1. It depends on parts of Claude Code and Codex that are not official interfaces (see [What it relies on](#what-it-relies-on)), so an update to either can break it.
 

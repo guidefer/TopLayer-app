@@ -59,6 +59,8 @@ if [ ! -f Resources/AppIcon.icns ] || [ Scripts/make-icon.swift -nt Resources/Ap
     sips -z "$double" "$double" "$work/icon.png" --out "$work/AppIcon.iconset/icon_${size}x${size}@2x.png" >/dev/null
   done
   iconutil -c icns "$work/AppIcon.iconset" -o Resources/AppIcon.icns
+  # The README shows the icon, and GitHub can't draw an .icns file.
+  sips -z 256 256 "$work/icon.png" --out Resources/icon.png >/dev/null
   rm -rf "$work"
 fi
 
