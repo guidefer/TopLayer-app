@@ -66,10 +66,10 @@ With the first three, what you allowed carries over from build to build. Ad-hoc 
 Which one to pick:
 
 - **An Apple Development certificate** is the one to prefer, and a free Apple account is enough. In Xcode, open Settings → Accounts, add your account, then Manage Certificates → + → Apple Development. The build finds it by itself.
-- **A self-signed certificate** needs no account. In Keychain Access, choose Keychain Access → Certificate Assistant → Create a Certificate…, name it `TopLayer Local Signing`, and set Certificate Type to Code Signing. Privacy permissions then carry over, but the web panes' keychain item still asks for your password after each build.
-- **Nothing** works too. Expect the password question after every build.
+- **A self-signed certificate** needs no account. In Keychain Access, choose Keychain Access → Certificate Assistant → Create a Certificate…, name it `TopLayer Local Signing`, and set Certificate Type to Code Signing. Privacy permissions then carry over, but the web panes' keychain item may still ask for your password after a build.
+- **Nothing** works too. Expect the web panes to ask for your password after every build.
 
-The password question is explained in [macOS asks for a password](TROUBLESHOOTING.md#macos-asks-for-your-password-for-toplayer-webcrypto-master-key).
+With either certificate, the first build stops while macOS asks whether `codesign` may use the certificate's key: press **Always Allow**. Both password questions are explained in [TROUBLESHOOTING.md](TROUBLESHOOTING.md#the-build-asks-for-your-password).
 
 ## First run
 
@@ -106,7 +106,7 @@ When something stops working, start with the Setup tab, then [TROUBLESHOOTING.md
 | Page Up / Page Down | Scroll the conversation |
 | ↑ / ↓ | Scroll a few lines, while the reply field is empty |
 | Home / End | Jump to the start or the latest message |
-| ⌘↩ / ⌘. | Allow or deny what is waiting |
+| ⌘↩ / ⌘. | Allow or deny what is waiting. On a question: next or send, and hand it to Claude |
 | ⌘W | Close the open thread |
 | ⎋ | Step back one size |
 
@@ -119,6 +119,8 @@ When something stops working, start with the Setup tab, then [TROUBLESHOOTING.md
 **Finding and pinning threads.** Each section lists only part of what exists: Codex its twelve most recently updated threads, Claude its running sessions. Click the magnifier in a section's header and type to search all of them by title and folder; the one you open stays at the top of the list. Right-click any thread and choose *Pin to Top* to keep it there for good.
 
 A Claude session that is no longer running is marked *read-only*: you can read it and copy from it, but there is no running session to deliver a reply to.
+
+**Questions.** When Claude stops to ask you something, the question appears above the panel with the answers it offers and an *Other* row for typing your own. One ask can hold several questions: they are shown one at a time, with a count, and all sent together after the last. *Ask in Claude* closes the card and leaves the question to Claude's own window.
 
 **Plan usage.** The ring in each section's header fills as that plan's tightest limit is used, and turns yellow, then red, when it is nearly gone. Hover it for how much is used and left; click it for every limit with its reset time, plus Codex's credit balance. Codex's numbers come from its background service. Claude's come from running the `claude` command's own `/usage` report every few minutes: a local command that calls no model, run with your hooks and tool servers switched off for that run and saving no session.
 

@@ -204,10 +204,14 @@ extension Store {
         guard pending != permissions else { return }
         for request in pending where !permissions.contains(where: { $0.id == request.id }) {
             let name = claudeRows.first { $0.rawId == request.sessionId }?.title ?? "session"
-            addEvent("Claude · \(name) asks permission: \(request.tool) \(request.summary.prefix(50))",
-                     rowId: "claude:\(request.sessionId)")
+            let what = request.isQuestion
+                ? "asks: \(request.questions[0].text.prefix(70))"
+                : "asks permission: \(request.tool) \(request.summary.prefix(50))"
+            addEvent("Claude · \(name) \(what)", rowId: "claude:\(request.sessionId)")
         }
         animate { permissions = pending }
+        questionDrafts = questionDrafts.filter { draft in pending.contains { $0.id == draft.key } }
+        questionBodies = questionBodies.filter { body in pending.contains { body.key.hasPrefix($0.id + "#") } }
     }
 
     func sessionName(for request: ClaudeBridge.PermissionRequest) -> String {
@@ -218,7 +222,42 @@ extension Store {
     func answer(_ request: ClaudeBridge.PermissionRequest, _ decision: String) {
         ClaudeBridge.answerPermission(id: request.id, decision: decision)
         permissions.removeAll { $0.id == request.id }
-        log("claude: permission \(decision) for \(request.tool)")
+        questionDrafts[request.id] = nil
+        log("claude: permission \(decision.hasPrefix("{") ? "answered" : decision) for \(request.tool)")
+    }
+
+    // MARK: Questions Claude asks (its AskUserQuestion tool)
+
+    /// Changes what is picked for a question, then publishes it.
+    func editQuestion(_ request: ClaudeBridge.PermissionRequest, _ change: (inout ClaudeBridge.QuestionDraft) -> Void) {
+        var draft = questionDrafts[request.id] ?? ClaudeBridge.QuestionDraft()
+        change(&draft)
+        draft.page = min(max(0, draft.page), request.questions.count - 1)
+        questionDrafts[request.id] = draft
+    }
+
+    /// Moves to the next question once the one showing has an answer, and sends them
+    /// all after the last. Returns false when there is nothing to move on from yet.
+    @discardableResult
+    func advanceQuestion(_ request: ClaudeBridge.PermissionRequest) -> Bool {
+        let draft = questionDrafts[request.id] ?? ClaudeBridge.QuestionDraft()
+        guard request.questions.indices.contains(draft.page),
+              draft.answer(for: request.questions[draft.page]) != nil else { return false }
+        if draft.page < request.questions.count - 1 {
+            animate { editQuestion(request) { $0.page += 1 } }
+            return true
+        }
+        return sendAnswers(request)
+    }
+
+    /// Sends every answer at once, which is how Claude takes them: one ask, one reply.
+    @discardableResult
+    func sendAnswers(_ request: ClaudeBridge.PermissionRequest) -> Bool {
+        let draft = questionDrafts[request.id] ?? ClaudeBridge.QuestionDraft()
+        guard let answers = draft.answers(for: request.questions),
+              let reply = ClaudeBridge.questionReply(input: request.input, answers: answers) else { return false }
+        animate { answer(request, reply) }
+        return true
     }
 
     /// A session just went from busy to idle. Its Stop hook should report within a few

@@ -47,14 +47,29 @@ struct PermissionPill: View {
     var body: some View {
         HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("\(store.sessionName(for: request)) asks: \(request.tool)")
-                    .font(.system(size: 12, weight: .semibold)).lineLimit(1)
-                Text(request.summary)
-                    .font(.system(size: 11, design: .monospaced)).lineLimit(1)
+                if request.isQuestion {
+                    let count = request.questions.count
+                    Text("\(store.sessionName(for: request)) asks \(count == 1 ? "a question" : "\(count) questions")")
+                        .font(.system(size: 12, weight: .semibold)).lineLimit(1)
+                    Text(request.questions[0].text)
+                        .font(.system(size: 11)).lineLimit(1)
+                } else {
+                    Text("\(store.sessionName(for: request)) asks: \(request.tool)")
+                        .font(.system(size: 12, weight: .semibold)).lineLimit(1)
+                    Text(request.summary)
+                        .font(.system(size: 11, design: .monospaced)).lineLimit(1)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            ActionButton("Deny") { store.answer(request, "deny") }
-            ActionButton("Allow", prominent: true) { store.answer(request, "allow") }
+            if request.isQuestion {
+                // Picking answers needs the open panel.
+                ActionButton("Answer", prominent: true, tint: Brand.color(.claude)) { store.setMode(.open) }
+            } else if request.needsClaude {
+                ActionButton("Ask in Claude", prominent: true, tint: Brand.color(.claude)) { store.answer(request, "ask") }
+            } else {
+                ActionButton("Deny") { store.answer(request, "deny") }
+                ActionButton("Allow", prominent: true) { store.answer(request, "allow") }
+            }
         }
         .padding(.horizontal, 14)
         .frame(width: Metrics.permissionWidth, height: Metrics.squircle)

@@ -111,6 +111,10 @@ final class Store: ObservableObject {
     @Published var queuedThreadIds = Set<String>()
     /// Claude permission prompts waiting for an answer from the overlay.
     @Published var permissions: [ClaudeBridge.PermissionRequest] = []
+    /// What you have picked so far for each question Claude is waiting on, by request.
+    @Published var questionDrafts: [String: ClaudeBridge.QuestionDraft] = [:]
+    /// How tall each question's text and options turned out once drawn (see `QuestionLayout.key`).
+    @Published var questionBodies: [String: CGFloat] = [:]
     /// Group chats and their rules. Its changes are republished here, so views that
     /// watch the store redraw for them too.
     let groupChats = GroupChatBroker()
@@ -439,7 +443,15 @@ final class Store: ObservableObject {
     @discardableResult
     func answerPending(approve: Bool) -> Bool {
         if let request = permissions.first {
-            answer(request, approve ? "allow" : "deny")
+            if request.isQuestion {
+                // A question has no yes or no: ⌘↩ moves on (and sends after the last
+                // one), ⌘. hands it back to Claude's own dialog.
+                if approve { advanceQuestion(request) } else { answer(request, "ask") }
+            } else if request.needsClaude {
+                answer(request, "ask")
+            } else {
+                answer(request, approve ? "allow" : "deny")
+            }
             return true
         }
         if let approval = approvals.first {

@@ -19,7 +19,8 @@ TopLayer depends on parts of Claude Code and Codex that it does not control, so 
 | A reply to a Codex thread takes a few seconds to appear | [A Codex reply is queued](#a-codex-reply-is-queued) |
 | An agent can't send a group chat message, or the send exits with 137 | [Group chat sends fail](#group-chat-sends-fail) |
 | A background Claude session can't be started | [TopLayer was started by an agent](#toplayer-was-started-by-an-agent) |
-| macOS keeps asking for your login password | [macOS asks for your password](#macos-asks-for-your-password-for-toplayer-webcrypto-master-key) |
+| The build stops and macOS asks for your keychain password | [The build asks for your password](#the-build-asks-for-your-password) |
+| Opening a web pane asks for your login password | [macOS asks for your password](#macos-asks-for-your-password-for-toplayer-webcrypto-master-key) |
 | The usage ring is empty | [The usage ring is empty](#the-usage-ring-is-empty) |
 | The overlay is missing from a screenshot or a shared screen | [The overlay is not in screenshots](#the-overlay-is-not-in-screenshots) |
 | A shortcut does nothing | [A shortcut does nothing](#a-shortcut-does-nothing) |
@@ -89,12 +90,20 @@ Claude Code marks every program an agent starts. If TopLayer is opened by a Clau
 
 Quit TopLayer and open it yourself, from Spotlight or `/Applications`. Everything else works either way.
 
+## The build asks for your password
+
+While `Scripts/build-app.sh` is signing, macOS can show *codesign wants to access key "…" in your keychain* and wait. The build has not failed: it is stopped at the signing step until you answer, and it shows nothing in the terminal while it waits.
+
+The key is the private half of your signing certificate, and it lives in your login keychain. Enter the keychain password and press **Always Allow**. *Allow* covers that one use, and the script signs twice, so it asks again at once and at every later build.
+
+If the script was started by a coding agent, the agent cannot answer this for you and will sit waiting. Look for the dialog on your screen.
+
 ## macOS asks for your password for TopLayer WebCrypto Master Key
 
 The web panes (the globe buttons) keep one item in your login keychain, named *TopLayer WebCrypto Master Key*. macOS lets an app read a keychain item without asking only if it is the app that was allowed before, and it tells apps apart by who signed them.
 
 - **Once, after changing how TopLayer is signed.** Expected: the item was allowed for the old signer. Enter your password and press **Always Allow**. *Allow* alone lets it through that one time and asks again at the next launch.
-- **After every build.** The build is signed ad-hoc or with a self-signed certificate, so each build is a different program to the keychain. Sign with an Apple Development certificate instead ([README: Signing](README.md#build-and-install)); a free Apple account is enough.
+- **After every build.** An ad-hoc signed build is a different program to the keychain every time. A self-signed certificate may not be enough either. Sign with an Apple Development certificate instead ([README: Signing](README.md#build-and-install)); a free Apple account is enough.
 - **Still asking, with an Apple certificate and after Always Allow.** This has not been needed so far, so it is untested: delete the item in Keychain Access and open a web pane again. A new one is made, belonging to the current signer. You may have to sign in to the web panes again.
 
 The question only comes up when a web pane is opened. The rest of TopLayer does not use the keychain.

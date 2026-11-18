@@ -341,6 +341,47 @@ enum ClaudeBridge {
         let sessionId: String
         let tool: String
         let summary: String
+        /// Set when this is not a permission at all but Claude asking you something
+        /// (its AskUserQuestion tool). One ask can carry several questions.
+        var questions: [AskedQuestion] = []
+        /// What Claude sent with the ask, kept to hand back with your answers.
+        var input = Data()
+
+        var isQuestion: Bool { !questions.isEmpty }
+        /// An ask whose questions could not be read. Allowing or denying it would answer
+        /// nothing, so the only thing to do with it here is hand it to Claude's own dialog.
+        var needsClaude: Bool { tool == "AskUserQuestion" && questions.isEmpty }
+    }
+
+    /// One question Claude asks, with the answers it offers.
+    struct AskedQuestion: Identifiable, Equatable {
+        struct Option: Equatable {
+            let label: String
+            let detail: String
+        }
+        let id: Int             // its place in the ask
+        let header: String
+        let text: String
+        let options: [Option]
+        let multiSelect: Bool
+
+        /// Reads the `questions` of an AskUserQuestion call. A question without text or
+        /// without options can't be answered here, so the whole ask is treated as one
+        /// TopLayer doesn't understand and is left to Claude's own dialog.
+        static func parse(_ input: [String: Any]) -> [AskedQuestion] {
+            guard let raw = input["questions"] as? [[String: Any]], !raw.isEmpty else { return [] }
+            var out = [AskedQuestion]()
+            for (index, question) in raw.enumerated() {
+                let options = (question["options"] as? [[String: Any]] ?? []).compactMap { option -> Option? in
+                    guard let label = option["label"] as? String, !label.isEmpty else { return nil }
+                    return Option(label: label, detail: option["description"] as? String ?? "")
+                }
+                guard let text = question["question"] as? String, !text.isEmpty, !options.isEmpty else { return [] }
+                out.append(AskedQuestion(id: index, header: question["header"] as? String ?? "", text: text,
+                                         options: options, multiSelect: question["multiSelect"] as? Bool ?? false))
+            }
+            return out
+        }
     }
 
     static func pendingPermissions() -> [PermissionRequest] {
@@ -356,14 +397,90 @@ enum ClaudeBridge {
             if summary.isEmpty, let raw = try? JSONSerialization.data(withJSONObject: input, options: [.sortedKeys]) {
                 summary = String(decoding: raw, as: UTF8.self)
             }
-            out.append(PermissionRequest(id: String(file.dropLast(5)), sessionId: sessionId,
-                                         tool: obj["tool_name"] as? String ?? "tool",
-                                         summary: String(summary.prefix(240))))
+            var request = PermissionRequest(id: String(file.dropLast(5)), sessionId: sessionId,
+                                            tool: obj["tool_name"] as? String ?? "tool",
+                                            summary: String(summary.prefix(240)))
+            if request.tool == "AskUserQuestion" {
+                request.questions = AskedQuestion.parse(input)
+                request.input = (try? JSONSerialization.data(withJSONObject: input, options: [.sortedKeys])) ?? Data()
+            }
+            out.append(request)
         }
         return out
     }
 
-    /// `decision` is "allow", "deny", or "ask" (hand the prompt back to the Claude app).
+    /// What you have picked so far for one ask.
+    struct QuestionDraft: Equatable {
+        /// The option labels picked for each question, by the question's place.
+        var picked: [Int: Set<String>] = [:]
+        /// An answer typed in place of the options, and which questions use one.
+        var typed: [Int: String] = [:]
+        var typing: Set<Int> = []
+        /// Which question is showing.
+        var page = 0
+
+        /// Picks an option, or takes it back. A question that allows one answer keeps
+        /// only the last pick, and picking an option there drops a typed answer.
+        mutating func toggle(_ label: String, in question: AskedQuestion) {
+            var labels = picked[question.id] ?? []
+            if question.multiSelect {
+                if labels.contains(label) { labels.remove(label) } else { labels.insert(label) }
+            } else {
+                labels = labels == [label] ? [] : [label]
+                typing.remove(question.id)
+            }
+            picked[question.id] = labels
+        }
+
+        /// Turns typing an answer on or off. Where one answer is allowed, it replaces the pick.
+        mutating func toggleTyping(in question: AskedQuestion) {
+            if typing.contains(question.id) {
+                typing.remove(question.id)
+            } else {
+                typing.insert(question.id)
+                if !question.multiSelect { picked[question.id] = [] }
+            }
+        }
+
+        /// The answer as Claude Code takes it: the label, several labels joined with a
+        /// comma in the order they were offered, or the text you typed. Nil while there is none.
+        func answer(for question: AskedQuestion) -> String? {
+            var parts = question.options.map(\.label).filter { picked[question.id]?.contains($0) == true }
+            if typing.contains(question.id) {
+                let text = (typed[question.id] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                if !text.isEmpty { parts.append(text) }
+            }
+            return parts.isEmpty ? nil : parts.joined(separator: ", ")
+        }
+
+        /// Every question's answer, keyed by the question's text. Nil until all have one.
+        func answers(for questions: [AskedQuestion]) -> [String: String]? {
+            var out = [String: String]()
+            for question in questions {
+                guard let answer = answer(for: question) else { return nil }
+                out[question.text] = answer
+            }
+            return out
+        }
+    }
+
+    /// The reply the permission hook prints to answer an ask: Claude's own input handed
+    /// back whole, with the answers added. That is the form Claude Code documents for
+    /// answering AskUserQuestion from a hook.
+    static func questionReply(input: Data, answers: [String: String]) -> String? {
+        guard var updated = try? JSONSerialization.jsonObject(with: input) as? [String: Any] else { return nil }
+        updated["answers"] = answers
+        let reply: [String: Any] = ["hookSpecificOutput": [
+            "hookEventName": "PermissionRequest",
+            "decision": ["behavior": "allow", "updatedInput": updated] as [String: Any],
+        ] as [String: Any]]
+        // One line: the hook passes it on as it is.
+        guard let data = try? JSONSerialization.data(withJSONObject: reply, options: [.sortedKeys, .withoutEscapingSlashes]) else { return nil }
+        return String(decoding: data, as: UTF8.self)
+    }
+
+    /// `decision` is "allow", "deny", "ask" (hand the prompt back to the Claude app), or
+    /// the whole reply to a question, from `questionReply`.
     static func answerPermission(id: String, decision: String) {
         let dir = root + "/permissions"
         let temp = "\(dir)/.\(id).tmp"

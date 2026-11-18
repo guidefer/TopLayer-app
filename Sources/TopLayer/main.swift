@@ -115,6 +115,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     ///       drags the mouse across the longest message on screen; search-<text> and
     ///       csearch-<text> (search Codex or Claude), pick and pickended (open the first
     ///       search result, or the first read-only one) and pin (pin or unpin the open thread))
+    ///       q-pick-<n>, q-other-<text>, q-next and q-back answer a question Claude is waiting on
     ///   TOPLAYER_DEBUG_SLOW=5               stretch every animation
     ///   TOPLAYER_DEBUG_LINK=<session id>    link that session to a throwaway Codex thread
     ///   TOPLAYER_DEBUG_CLAUDE_ARGS=...      extra arguments for sessions started with the claude command
@@ -181,6 +182,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         }
                         let title = store.selectedRow?.title ?? store.selectedChat?.title ?? "nothing"
                         log("after \(action): selected=\(title) permissions=\(store.permissions.count)")
+                    } else if action.hasPrefix("q-"), let request = store.permissions.first(where: \.isQuestion) {
+                        // Answers the question that is waiting: q-pick-1 picks the second
+                        // option of the question showing, q-other-<text> types an answer,
+                        // q-next moves on (and sends after the last), q-back goes back.
+                        let question = request.questions[min(store.questionDrafts[request.id]?.page ?? 0, request.questions.count - 1)]
+                        if action.hasPrefix("q-pick-"), let index = Int(action.dropFirst(7)), question.options.indices.contains(index) {
+                            store.editQuestion(request) { $0.toggle(question.options[index].label, in: question) }
+                        } else if action.hasPrefix("q-other-") {
+                            store.editQuestion(request) {
+                                if !$0.typing.contains(question.id) { $0.toggleTyping(in: question) }
+                                $0.typed[question.id] = String(action.dropFirst(8))
+                            }
+                        } else if action == "q-next" {
+                            log("q-next moved=\(store.advanceQuestion(request))")
+                        } else if action == "q-back" {
+                            store.editQuestion(request) { $0.page -= 1 }
+                        }
                     } else if action.hasPrefix("usage-") {
                         // usage-Claude opens that section's usage detail.
                         let source = AgentSource(rawValue: String(action.dropFirst(6))) ?? .codex

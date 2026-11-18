@@ -19,8 +19,14 @@ struct RootView: View {
         VStack(spacing: Metrics.gap) {
             if !store.squircle {
                 ForEach(store.permissions) { request in
-                    PermissionCard(store: store, request: request)
-                        .transition(.opacity.combined(with: .move(edge: .top)))
+                    Group {
+                        if request.isQuestion {
+                            QuestionCard(store: store, request: request, width: size.width - Metrics.inset * 2)
+                        } else {
+                            PermissionCard(store: store, request: request)
+                        }
+                    }
+                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
             HStack(alignment: .top, spacing: Metrics.gap) {
@@ -69,14 +75,20 @@ struct PermissionCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("\(store.sessionName(for: request)) asks permission: \(request.tool)")
+            Text(request.needsClaude ? "\(store.sessionName(for: request)) asks you something"
+                                     : "\(store.sessionName(for: request)) asks permission: \(request.tool)")
                 .font(.system(size: 12, weight: .semibold))
-            Text(request.summary).font(.system(size: 11, design: .monospaced)).lineLimit(3)
+            Text(request.needsClaude ? "TopLayer could not read the question. Answer it in Claude's own window." : request.summary)
+                .font(.system(size: 11, design: request.needsClaude ? .default : .monospaced)).lineLimit(3)
             HStack(spacing: 6) {
                 Spacer(minLength: 0)
-                ActionButton("Ask in Claude") { store.answer(request, "ask") }
-                ActionButton("Deny") { store.answer(request, "deny") }
-                ActionButton("Allow", prominent: true) { store.answer(request, "allow") }
+                if request.needsClaude {
+                    ActionButton("Ask in Claude", prominent: true, tint: Brand.color(.claude)) { store.answer(request, "ask") }
+                } else {
+                    ActionButton("Ask in Claude") { store.answer(request, "ask") }
+                    ActionButton("Deny") { store.answer(request, "deny") }
+                    ActionButton("Allow", prominent: true) { store.answer(request, "allow") }
+                }
             }
         }
         .padding(12)

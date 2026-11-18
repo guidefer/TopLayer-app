@@ -3,6 +3,8 @@
 #
 # When Claude asks for permission (run a command, edit a file), this hands the
 # request to the TopLayer overlay and waits for you to click Allow or Deny there.
+# A question Claude asks you (its AskUserQuestion tool) arrives the same way; for
+# those the overlay writes out the whole answer, and this prints it as it is.
 #
 # It gets out of the way whenever the overlay can't answer:
 #   - overlay not running (no fresh heartbeat)      -> exit at once
@@ -41,7 +43,12 @@ trap cleanup EXIT
 deadline=$(( $(date +%s) + WAIT_SECONDS ))
 while [ "$(date +%s)" -lt "$deadline" ]; do
   if [ -f "$answer" ]; then
-    case "$(cat "$answer")" in
+    decision="$(cat "$answer")"
+    case "$decision" in
+      \{*)
+        # Your answers to a question, as the complete reply Claude Code expects.
+        printf '%s\n' "$decision"
+        ;;
       allow)
         echo '{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow"}}}'
         ;;

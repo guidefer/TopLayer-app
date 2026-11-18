@@ -89,8 +89,11 @@ enum PanelLayout {
             // never gets shorter than a comfortable reading height, and folding a section
             // away does not count: the conversation keeps its height while you tidy the
             // sidebar beside it.
+            // The cards above the panel are part of its height. A question's card depends
+            // on how wide the panel is, so the width is settled first.
+            let width = min(maxWidth, store.hasConversation ? store.preferences.openWidth : Metrics.sidebarWidth + Metrics.inset * 2)
             let ideal = idealSidebarHeight(store, unfolded: store.hasConversation)
-                + Metrics.inset * 2 + CGFloat(store.permissions.count) * 118
+                + Metrics.inset * 2 + cardsHeight(store, width: width - Metrics.inset * 2)
             size = CGSize(width: store.preferences.openWidth, height: store.hasConversation ? max(660, ideal) : ideal)
         case .expanded:
             // The chosen share of the screen, a little taller than it is wide.
@@ -102,6 +105,16 @@ enum PanelLayout {
             size.height = min(size.height, cap)             // debug: pretend the screen is short
         }
         return CGSize(width: min(size.width, maxWidth), height: min(size.height, maxHeight))
+    }
+
+    /// Height of the permission and question cards above the panel, with the gap under each.
+    static func cardsHeight(_ store: Store, width: CGFloat) -> CGFloat {
+        store.permissions.reduce(0) { total, request in
+            total + Metrics.gap + (request.isQuestion
+                ? QuestionLayout.height(request, draft: store.questionDrafts[request.id], card: width,
+                                        measured: store.questionBodies[QuestionLayout.key(request, draft: store.questionDrafts[request.id], card: width)])
+                : 110)
+        }
     }
 
     /// Height of everything in the sidebar that never scrolls. With `unfolded`, sections
