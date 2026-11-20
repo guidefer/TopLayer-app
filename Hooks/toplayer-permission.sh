@@ -15,7 +15,8 @@
 # Note: while this hook is waiting, the Claude app has not shown its own prompt
 # yet, so the overlay is the only place to answer until the wait ends.
 
-ROOT="$HOME/.toplayer"
+# TOPLAYER_HOME moves it, for Scripts/check-claude.sh, which must not touch the real one.
+ROOT="${TOPLAYER_HOME:-$HOME/.toplayer}"
 PERM="$ROOT/permissions"
 HEARTBEAT="$ROOT/overlay.alive"
 WAIT_SECONDS="${TOPLAYER_PERMISSION_WAIT:-300}"

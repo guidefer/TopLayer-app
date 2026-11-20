@@ -33,6 +33,11 @@ final class CodexClient {
 
     // MARK: Public API
 
+    /// The error for a request whose answer never came because the connection dropped.
+    /// Codex may or may not have acted on it, so it must not be sent again. Every other
+    /// error is Codex refusing, or the request never leaving: those were not acted on.
+    static let connectionClosed = "connection closed"
+
     func request(_ method: String, _ params: [String: Any] = [:],
                  completion: @escaping ([String: Any]?, String?) -> Void) {
         lock.lock()
@@ -65,7 +70,7 @@ final class CodexClient {
             pending.removeAll()
             lock.unlock()
             close(s)
-            for (_, cb) in orphans { DispatchQueue.main.async { cb(nil, "connection closed") } }
+            for (_, cb) in orphans { DispatchQueue.main.async { cb(nil, Self.connectionClosed) } }
         }
         var on: Int32 = 1
         setsockopt(s, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))

@@ -32,6 +32,8 @@ extension Store {
             self.codexRecent = self.codexRows(from: data)
             self.codexShelf.absorb(recent: self.codexRecent, paths: self.codexPaths)
             self.composeCodexRows()
+            // The list has loaded, so saved marks still unclaimed are for threads no longer on it.
+            self.restoredUnread = self.restoredUnread.filter { !$0.hasPrefix("codex:") }
             self.restoreSelectionIfNeeded()
         }
     }
@@ -191,7 +193,9 @@ extension Store {
             self.codex.request("turn/start", turn) { [weak self] result, error in
                 if result == nil {
                     self?.sending = false
-                    self?.notice = "Codex: \(error ?? "turn/start failed")"
+                    self?.notice = error == CodexClient.connectionClosed
+                        ? "The connection to Codex dropped before it answered. Your message may or may not have arrived, so it was not sent again."
+                        : "Codex: \(error ?? "turn/start failed")"
                 }
             }
         }

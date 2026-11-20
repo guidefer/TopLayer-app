@@ -12,9 +12,11 @@
 #       "finished" / "needs your input" without guessing from status files.
 #
 # One listener per session: a newer one supersedes the older one.
+# A headless run (claude -p) gets no listener: see below.
 # Nothing here runs until you register it in your Claude settings yourself.
 
-ROOT="$HOME/.toplayer"
+# TOPLAYER_HOME moves it, for Scripts/check-claude.sh, which must not touch the real one.
+ROOT="${TOPLAYER_HOME:-$HOME/.toplayer}"
 INBOX="$ROOT/inbox"
 LOG="$ROOT/hook.log"
 EVENTS="$ROOT/events.jsonl"
@@ -50,12 +52,27 @@ case "$event" in
   SessionEnd) rm -f "$pidfile"; exit 0 ;;
 esac
 
+# The Claude process that owns this session, from its own registry file.
+ownerfile=$(grep -l "\"sessionId\":\"$sid\"" "$HOME"/.claude/sessions/*.json 2>/dev/null | head -1)
+owner=$(basename "${ownerfile:-none}" .json)
+
+# A headless run (claude -p) does not put this hook in the background: it waits for it
+# to finish before doing anything, so a listener would hold the run up for as long as
+# the listener lives. Nothing can be said to such a run anyway, since it ends with its
+# turn. Its events are in the log above, and that is all it gets.
+headless=""
+[ "${CLAUDE_CODE_ENTRYPOINT:-}" = "sdk-cli" ] && headless="its environment"
+if [ -z "$headless" ] && [ -n "$ownerfile" ] \
+  && grep -q '"entrypoint"[[:space:]]*:[[:space:]]*"sdk-cli"' "$ownerfile" 2>/dev/null; then
+  headless="its registry file"
+fi
+if [ -n "$headless" ]; then
+  case "$event" in SessionStart) note "headless by $headless, no listener" ;; esac
+  exit 0
+fi
+
 mkdir -p "$dir/delivered"
 find "$dir/delivered" -type f -mtime +1 -delete 2>/dev/null   # old receipts
-
-# The Claude process that owns this session, from its own registry file.
-owner=$(grep -l "\"sessionId\":\"$sid\"" "$HOME"/.claude/sessions/*.json 2>/dev/null | head -1)
-owner=$(basename "${owner:-none}" .json)
 
 echo $$ > "$pidfile"
 touch "$dir/hooked"               # tells the overlay this session can receive replies

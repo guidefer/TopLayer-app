@@ -47,17 +47,28 @@ extension Store: GroupChatTransport {
         }
     }
 
+    /// How long Codex gets to answer a send before it is shown as unconfirmed.
+    static let codexAnswerWait: TimeInterval = 20
+
     /// Sends into a Codex thread without touching the selected-thread UI state:
     /// directly when the daemon can own the thread, through the thread queue otherwise.
-    func relayToCodex(_ threadId: String, _ text: String, status: @escaping (String) -> Void) {
+    func relayToCodex(_ threadId: String, _ text: String, status report: @escaping (String) -> Void) {
         let input: [[String: Any]] = [["type": "text", "text": text]]
+        // Codex either accepts, refuses, or says nothing. Silence is reported as what it
+        // is, and a late answer still corrects it.
+        var heard = false
+        let status: (String) -> Void = { heard = true; report($0) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.codexAnswerWait) {
+            if !heard { report(GroupChatBroker.unconfirmed("Codex has not answered")) }
+        }
+        let dropped = GroupChatBroker.unconfirmed("the connection to Codex dropped")
         let queue = { [weak self] (why: String) in
             guard let self else { return }
             self.codex.request("thread/queue/add", [
                 "threadId": threadId, "clientUserMessageId": UUID().uuidString, "input": input,
             ]) { [weak self] result, error in
                 guard let id = (result?["queuedSubmission"] as? [String: Any])?["id"] as? String else {
-                    return status("failed: \(error ?? why)")
+                    return status(error == CodexClient.connectionClosed ? dropped : "failed: \(error ?? why)")
                 }
                 self?.pendingQueueStatus[id] = (threadId, status)
                 status("queued")
@@ -67,7 +78,13 @@ extension Store: GroupChatTransport {
             guard let self else { return }
             self.ownTurnThreads.insert(threadId)
             self.codex.request("turn/start", ["threadId": threadId, "input": input]) { result, error in
-                if result != nil { status("delivered") } else { queue(error ?? "turn/start failed") }
+                if result != nil {
+                    status("delivered")
+                } else if error == CodexClient.connectionClosed {
+                    status(dropped)         // it may have started: queueing it too could deliver it twice
+                } else {
+                    queue(error ?? "turn/start failed")
+                }
             }
         }
         if resumedThreads.contains(threadId) {

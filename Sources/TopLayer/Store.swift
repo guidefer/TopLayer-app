@@ -104,7 +104,6 @@ final class Store: ObservableObject {
     @Published var sending = false
     @Published var codexStatus = "connecting…"
     @Published var codexConnected = false
-    @Published var unreadCount = 0
     @Published var approvals: [PendingApproval] = []
     @Published var notice: String?
     /// Codex threads with a message of ours waiting in the owner's queue.
@@ -246,7 +245,6 @@ final class Store: ObservableObject {
         groupChatSink = groupChats.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
         groupChats.start()
         preferencesSink = preferences.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
-        unreadCount = UserDefaults.standard.integer(forKey: "unreadCount")
         health.store = self
         healthSink = health.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
         health.refresh()
@@ -333,8 +331,9 @@ final class Store: ObservableObject {
         let arriving = present.filter { !isShown($0) }
         animate(with: Motion.panel, settle: Motion.openStep * Double(arriving.count) + Motion.settle) {
             peek = nil
-            markAllSeen()
             mode = new
+            // The thread that is open is on screen again, so it has been seen.
+            if let selectedId { setUnread(selectedId, false) }
             squircle = false
             if calm { shown = everything }
         }
@@ -420,6 +419,12 @@ final class Store: ObservableObject {
         return row.unread && !row.isBusy
     }
 
+    /// How many threads are waiting on you. The squircle's badge shows this number, so it
+    /// always matches the threads marked in the lists, and it goes down as you open them.
+    var waitingCount: Int {
+        Set((claudeRows + codexRows).map(\.id) + groupChats.chats.map(\.rowId)).filter(needsYou).count
+    }
+
     /// Moves the selection up or down the sidebar, wrapping at the ends. With
     /// `onlyNeedingYou`, it skips to the next thread that is waiting on you.
     @discardableResult
@@ -474,14 +479,11 @@ final class Store: ObservableObject {
         }
     }
 
-    func markAllSeen() {
-        unreadCount = 0
-        saveUnread()
-    }
-
+    /// Keeps what is unread for the next launch. A list that has not loaded yet still
+    /// has its threads in `restoredUnread`, and they are kept too.
     func saveUnread() {
-        UserDefaults.standard.set((claudeRows + codexRows).filter(\.unread).map(\.id), forKey: "unreadRows")
-        UserDefaults.standard.set(unreadCount, forKey: "unreadCount")
+        let unread = Set((claudeRows + codexRows).filter(\.unread).map(\.id)).union(restoredUnread)
+        UserDefaults.standard.set(unread.sorted(), forKey: "unreadRows")
     }
 
     /// Where to resume the hook event log. If the log is much longer than where we
@@ -531,7 +533,6 @@ final class Store: ObservableObject {
     func addEvent(_ text: String, rowId: String) {
         log("event: \(text)")
         if !(expanded && selectedId == rowId) {
-            unreadCount += 1
             setUnread(rowId, true)
             if preferences.playSound, !catchingUp { NSSound(named: "Tink")?.play() }
         }

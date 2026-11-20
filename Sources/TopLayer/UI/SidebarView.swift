@@ -107,8 +107,9 @@ struct SidebarView: View {
         }
         .shadow(color: .black.opacity(collapsed ? 0.35 : 0), radius: 5, y: 2)
         .overlay(alignment: .topTrailing) {
-            if collapsed && store.unreadCount > 0 {
-                Text("\(min(store.unreadCount, 99))")
+            // How many threads are waiting on you: the ones marked in the lists.
+            if collapsed && store.waitingCount > 0 {
+                Text("\(min(store.waitingCount, 99))")
                     .font(.system(size: 10, weight: .bold))
                     .foregroundStyle(.white)
                     .frame(minWidth: 10)
@@ -119,13 +120,13 @@ struct SidebarView: View {
                     .transition(.scale.combined(with: .opacity))
             }
         }
-        .animation(Motion.panel, value: store.unreadCount > 0)
+        .animation(Motion.panel, value: store.waitingCount > 0)
         .overlay {
             // Collapsed: over the whole squircle. A click opens the overlay.
             if collapsed { ClickDragArea(onClick: { store.toggle() }, onRightClick: showMenu) }
         }
         .help(collapsed ? "" : "\(store.health.summary). Click for setup and health.")
-        .accessibilityLabel(collapsed ? "TopLayer, \(store.unreadCount) unread" : "TopLayer. \(store.health.summary)")
+        .accessibilityLabel(collapsed ? "TopLayer, \(store.waitingCount) waiting on you" : "TopLayer. \(store.health.summary)")
     }
 
     private var healthColor: Color {

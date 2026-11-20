@@ -464,6 +464,24 @@ enum ClaudeBridge {
         }
     }
 
+    /// Whether a session is one TopLayer started for itself: the short run that reads
+    /// usage, or a run of `Scripts/check-claude.sh`, which works in a scratch folder
+    /// named `toplayer-check.<something>`. Those are not threads of yours.
+    static func isOwnRun(cwd: String) -> Bool {
+        cwd == ClaudeUsage.folder || cwd.split(separator: "/").contains { $0.hasPrefix("toplayer-check.") }
+    }
+
+    /// Whether a turn ended with agents of its own still at work. Each one reports back
+    /// to the session, which then carries on by itself, so the session is not waiting on
+    /// you. A shell command or a monitor left running does not count: a server can run
+    /// for as long as the session does, and the turn that started it is finished.
+    static func hasAgentsRunning(_ event: [String: Any]) -> Bool {
+        let tasks = event["background_tasks"] as? [[String: Any]] ?? []
+        return tasks.contains { task in
+            task["status"] as? String == "running" && ["subagent", "workflow"].contains(task["type"] as? String ?? "")
+        }
+    }
+
     /// The reply the permission hook prints to answer an ask: Claude's own input handed
     /// back whole, with the answers added. That is the form Claude Code documents for
     /// answering AskUserQuestion from a hook.

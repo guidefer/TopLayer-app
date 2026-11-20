@@ -11,8 +11,8 @@ extension Store {
         let unreadIds = Set(claudeRows.filter(\.unread).map(\.id))
         var rows = [SessionRow]()
         var seen = [String: ClaudeBridge.Session]()
-        // The short run that reads usage is not a session of yours.
-        for s in sessions where s.cwd != ClaudeUsage.folder {
+        // The short runs TopLayer starts for itself are not sessions of yours.
+        for s in sessions where !ClaudeBridge.isOwnRun(cwd: s.cwd) {
             seen[s.sessionId] = s
             var row = SessionRow(id: "claude:\(s.sessionId)", source: .claude, rawId: s.sessionId,
                                  title: s.name, cwd: s.cwd, status: s.status, updatedAt: s.updatedAt)
@@ -40,6 +40,9 @@ extension Store {
             row.unread = unreadIds.contains(row.id) || restoredUnread.remove(row.id) != nil
             rows.append(row)
         }
+        // Every running session has been through the loop above, so what is left of the
+        // saved marks belongs to sessions that are gone.
+        restoredUnread = restoredUnread.filter { !$0.hasPrefix("claude:") }
         claudeLive = rows
         claudeShelf.absorb(recent: rows, paths: [:])
         composeClaudeRows()
@@ -182,7 +185,13 @@ extension Store {
                 hookMisses[sessionId] = nil
                 let reply = (event["last_assistant_message"] as? String ?? "")
                     .split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
-                addEvent("Claude · \(name): finished" + (reply.isEmpty ? "" : " — \(reply.prefix(70))"), rowId: rowId)
+                if ClaudeBridge.hasAgentsRunning(event) {
+                    // The turn ended, the work did not: its agents report back and it
+                    // carries on by itself. Nothing is waiting on you yet.
+                    log("claude: \(sessionId.prefix(8)) ended a turn with agents still running")
+                } else {
+                    addEvent("Claude · \(name): finished" + (reply.isEmpty ? "" : " — \(reply.prefix(70))"), rowId: rowId)
+                }
                 // If this turn answered something you posted in a group chat, bring it there.
                 groupChats.turnFinished(source: .claude, rawId: sessionId,
                                         finalMessage: event["last_assistant_message"] as? String)

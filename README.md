@@ -94,6 +94,8 @@ When something stops working, start with the Setup tab, then [TROUBLESHOOTING.md
 
 **Three sizes.** The squircle, a compact panel in its corner, and an expanded reading layout. Drag the squircle or the TopLayer bar to move it; it snaps to the nearest screen corner.
 
+**The red number.** On the squircle, it is how many threads are waiting on you: a finished turn you have not opened, a permission prompt, a question, or a group chat message held for your approval. The squircle's layers light up in Claude's or Codex's colour to say whose they are. The number goes down as you open each thread, not when you open the panel. A session whose own agents are still running is not counted until it has really finished.
+
 **Shortcuts**
 
 | Keys | What they do |
@@ -160,6 +162,14 @@ Scripts/test.sh
 
 The tests use Swift Testing, which needs the full Xcode toolchain; the script selects it for that command only. They cover the group chat rules, the markdown parser, the installers and the welcome guide (against scratch copies, never your real files), that the note quotes the hook word for word, and transcript reading.
 
+**Against the real Claude Code.** The tests check TopLayer against what Claude Code is documented to send. After a Claude Code update, this checks the real thing:
+
+```bash
+Scripts/check-claude.sh
+```
+
+It runs a few short headless turns with this checkout's hooks and checks that a finished turn, an allowed permission prompt and a denied one still arrive and are answered as the hooks expect. It works in a scratch folder: your Claude settings and your `~/.toplayer` are left alone, and the overlay does not list the runs. It uses your Claude login, for well under a cent. Run it from your own terminal, not from inside a Claude session. Questions are not covered, because Claude Code gives a headless run no question tool: check those by hand.
+
 ## Project layout
 
 ```
@@ -178,7 +188,7 @@ Sources/TopLayer/
   UI/                     SwiftUI views; Theme.swift holds colours, radii and sizes
 Sources/TopLayerLink/     the toplayer-link tool (MCP server and command)
 Hooks/                    the two hook scripts Claude runs
-Scripts/                  build-app.sh, test.sh, make-icon.swift
+Scripts/                  build-app.sh, test.sh, check-claude.sh, make-icon.swift
 Tests/TopLayerTests/      tests
 ```
 
